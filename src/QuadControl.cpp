@@ -55,6 +55,7 @@ void QuadControl::Init()
 
 VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momentCmd)
 {
+
   // Convert a desired 3-axis moment and collective thrust command to 
   //   individual motor thrust commands
   // INPUTS: 
@@ -70,13 +71,36 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
-  cmd.desiredThrustsN[0] = mass * 9.81f / 4.f; // front left
-  cmd.desiredThrustsN[1] = mass * 9.81f / 4.f; // front right
-  cmd.desiredThrustsN[2] = mass * 9.81f / 4.f; // rear left
-  cmd.desiredThrustsN[3] = mass * 9.81f / 4.f; // rear right
+	///////////////DRONE REFERENCE///////////////////////
+	/****************************************************
+				   0 CW         1 CCW
+					\\		  //
+					  \\	//
+						\\//
+						//\\
+					  //    \\
+					//        \\
+				   2 CCW        3 CW
+	****************************************************/
+	/////////////////////////////////////////////////////
+	
+	float A = collThrustCmd;
+	float B = momentCmd.x/L;
+	float C = momentCmd.y/L;
+	float D = momentCmd.z/kappa;
+
+	float N0 = (1.f / 4.f) * (A + B + C - D);
+	float N1 = (1.f / 4.f) * (A - B + C + D);
+	float N2 = (1.f / 4.f) * (A + B - C + D);
+	float N3 = (1.f / 4.f) * (A - B - C - D);
+
+	cmd.desiredThrustsN[0] = CONSTRAIN(N0, minMotorThrust, maxMotorThrust); // front left
+	cmd.desiredThrustsN[1] = CONSTRAIN(N1, minMotorThrust, maxMotorThrust); // front right
+	cmd.desiredThrustsN[2] = CONSTRAIN(N2, minMotorThrust, maxMotorThrust); // rear left
+	cmd.desiredThrustsN[3] = CONSTRAIN(N3, minMotorThrust, maxMotorThrust); // rear right
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
-
+	
   return cmd;
 }
 
@@ -98,7 +122,18 @@ V3F QuadControl::BodyRateControl(V3F pqrCmd, V3F pqr)
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
-  
+  //error in body rates
+  V3F pqrError = pqrCmd - pqr;
+  V3F accelCmdLocal;
+  //apply first-order p-controller to get commanded ang-accel in body-frame from ang. rates 
+  accelCmdLocal.x = kpPQR.x * pqrError.x;
+  accelCmdLocal.y = kpPQR.y * pqrError.y;
+  accelCmdLocal.z = kpPQR.z * pqrError.z;
+
+  //moment m = I (inertia) x a (ang-accel)
+  momentCmd.x = Ixx * accelCmdLocal.x;
+  momentCmd.y = Iyy * accelCmdLocal.y;
+  momentCmd.z = Izz * accelCmdLocal.z;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -129,6 +164,16 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
+  //relation of collective thrust to acceleration is ax = c * b_x, ay = c * b_y and az = g - (c * b_z)
+  float b_x_c = accelCmd.x / collThrustCmd;
+  float b_y_c = accelCmd.y / collThrustCmd;
+
+  float b_x_c_dot = kpBank * (b_x_c - R(0, 2));
+  float b_y_c_dot = kpBank * (b_y_c - R(1, 2));
+  
+  pqrCmd.x = (R(1, 0) * b_x_c_dot) - (R(0, 0) * b_y_c_dot) * (1 / R(2, 2));
+  pqrCmd.y = (R(1, 1) * b_x_c_dot) - (R(0, 1) * b_y_c_dot) * (1 / R(2, 2));
+  pqrCmd.z = 0.f;
 
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
@@ -161,6 +206,7 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
+  thrust = mass * 9.81f + 0.05f;
 
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
