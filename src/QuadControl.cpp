@@ -26,10 +26,12 @@ void QuadControl::Init()
   // Load parameters (default to 0)
   kpPosXY = config->Get(_config+".kpPosXY", 0);
   kpPosZ = config->Get(_config + ".kpPosZ", 0);
+  freqXYZ = config->Get(_config + ".freqXYZ", 0);
   KiPosZ = config->Get(_config + ".KiPosZ", 0);
      
   kpVelXY = config->Get(_config + ".kpVelXY", 0);
   kpVelZ = config->Get(_config + ".kpVelZ", 0);
+  deltaXYZ = config->Get(_config + ".deltaXYZ", 0);
 
   kpBank = config->Get(_config + ".kpBank", 0);
   kpYaw = config->Get(_config + ".kpYaw", 0);
@@ -163,18 +165,31 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
   Mat3x3F R = attitude.RotationMatrix_IwrtB();
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-
-  //relation of collective thrust to acceleration is ax = c * b_x, ay = c * b_y and az = g - (c * b_z)
-  float b_x_c = accelCmd.x / collThrustCmd;
-  float b_y_c = accelCmd.y / collThrustCmd;
-
-  float b_x_c_dot = kpBank * (b_x_c - R(0, 2));
-  float b_y_c_dot = kpBank * (b_y_c - R(1, 2));
   
-  pqrCmd.x = (R(1, 0) * b_x_c_dot) - (R(0, 0) * b_y_c_dot) * (1 / R(2, 2));
-  pqrCmd.y = (R(1, 1) * b_x_c_dot) - (R(0, 1) * b_y_c_dot) * (1 / R(2, 2));
-  pqrCmd.z = 0.f;
+  float c = -collThrustCmd/mass;
 
+  if (collThrustCmd > 0.0) {
+	  float b_x_c = accelCmd.x / c;
+	  float b_y_c = accelCmd.y / c;
+
+	  // limit the tilt angles using the max_tilt value
+	  b_x_c = CONSTRAIN(b_x_c, -maxTiltAngle, maxTiltAngle);
+	  b_y_c = CONSTRAIN(b_y_c, -maxTiltAngle, maxTiltAngle);
+
+	  ////apply p-conroller on the error in rotation matrix elements corresponding to direction of horizontal acceleration
+	  float b_x_c_dot = kpBank * (b_x_c - R(0, 2));
+	  float b_y_c_dot = kpBank * (b_y_c - R(1, 2));
+
+	  pqrCmd.x = (R(1, 0) * b_x_c_dot) - (R(0, 0) * b_y_c_dot) * (1 / R(2, 2));
+	  pqrCmd.y = (R(1, 1) * b_x_c_dot) - (R(0, 1) * b_y_c_dot) * (1 / R(2, 2));
+  }
+  else {
+	  // If thrust is negative or = 0 then set pitch and roll rates to zero
+	  pqrCmd.x = 0.0;
+	  pqrCmd.y = 0.0;
+  }
+
+  pqrCmd.z = 0;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -206,12 +221,18 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
-  thrust = mass * 9.81f + 0.05f;
-
-
+  float posZErr = posZCmd - posZ;
+  velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate);
+  float velZErr = velZCmd - velZ;
+  float kp, kd;  
+  Tune(kp, kd, deltaXYZ, freqXYZ);
+  float accelZTarget = kp * posZErr + kd * velZErr + accelZCmd;
+  float bz = R(2, 2);
+  thrust = (accelZTarget - 9.81) / bz;
+  
   /////////////////////////////// END STUDENT CODE ////////////////////////////
   
-  return thrust;
+  return -thrust;
 }
 
 // returns a desired acceleration in global frame
@@ -244,8 +265,16 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   V3F accelCmd = accelCmdFF;
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+  V3F posErr = posCmd - pos;
+  float hSpeed = CONSTRAIN(velCmd.mag(), -maxSpeedXY, maxSpeedXY);
+  velCmd = velCmd.norm() * hSpeed;  
+  V3F velErr = velCmd - vel;
+  float kp, kd;  
+  Tune(kp, kd, deltaXYZ, freqXYZ);
+  accelCmd += kp * posErr + kd * velErr;
 
-  
+  float hAccel = CONSTRAIN(accelCmd.mag(), -maxAccelXY, maxAccelXY);
+  accelCmd = accelCmd.norm() * hAccel;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -267,12 +296,29 @@ float QuadControl::YawControl(float yawCmd, float yaw)
 
   float yawRateCmd=0;
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-
+  
+  yawCmd = fmodf(yawCmd, 2.0*M_PI);
+  
+  float yawErr = yawCmd - yaw;
+  if (yawErr > M_PI) {
+	  yawErr -= 2.f * M_PI;
+  }
+  else if (yawErr < -M_PI) {
+	  yawErr += 2.f * M_PI;
+  }
+  
+  yawRateCmd = kpYaw * yawErr;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
   return yawRateCmd;
 
+}
+
+void QuadControl::Tune(float&kp, float&kd, float delta, float freq) {
+	kp = freq * freq;
+	kd = 2 * delta * freq;
+	return;
 }
 
 VehicleCommand QuadControl::RunControl(float dt, float simTime)
