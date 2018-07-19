@@ -26,12 +26,10 @@ void QuadControl::Init()
   // Load parameters (default to 0)
   kpPosXY = config->Get(_config+".kpPosXY", 0);
   kpPosZ = config->Get(_config + ".kpPosZ", 0);
-  freqXYZ = config->Get(_config + ".freqXYZ", 0);
   KiPosZ = config->Get(_config + ".KiPosZ", 0);
      
   kpVelXY = config->Get(_config + ".kpVelXY", 0);
   kpVelZ = config->Get(_config + ".kpVelZ", 0);
-  deltaXYZ = config->Get(_config + ".deltaXYZ", 0);
 
   kpBank = config->Get(_config + ".kpBank", 0);
   kpYaw = config->Get(_config + ".kpYaw", 0);
@@ -225,8 +223,6 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   integratedAltitudeError += posZErr * dt;
   velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate);
   float velZErr = velZCmd - velZ;
-  float kp, kd;  
-  Tune(kp, kd, deltaXYZ, freqXYZ);
   float accelZTarget = kpPosZ * posZErr + KiPosZ * integratedAltitudeError + kpVelZ * velZErr + accelZCmd;
   float bz = R(2, 2);
   thrust = (accelZTarget - 9.81) / bz;
@@ -270,8 +266,6 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   float hSpeed = CONSTRAIN(velCmd.mag(), -maxSpeedXY, maxSpeedXY);
   velCmd = velCmd.norm() * hSpeed;  
   V3F velErr = velCmd - vel;
-  float kp, kd;  
-  Tune(kp, kd, deltaXYZ, freqXYZ);
   accelCmd += kpPosXY * posErr + kpVelXY * velErr;
 
   float hAccel = CONSTRAIN(accelCmd.mag(), -maxAccelXY, maxAccelXY);
@@ -314,12 +308,6 @@ float QuadControl::YawControl(float yawCmd, float yaw)
 
   return yawRateCmd;
 
-}
-
-void QuadControl::Tune(float&kp, float&kd, float delta, float freq) {
-	kp = freq * freq;
-	kd = 2 * delta * freq;
-	return;
 }
 
 VehicleCommand QuadControl::RunControl(float dt, float simTime)

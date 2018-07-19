@@ -30,13 +30,11 @@ public:
 
   float AltitudeControl(float posZCmd, float velZCmd, float posZ, float velZ, Quaternion<float> attitude, float accelZCmd, float dt);
 
-  void Tune(float& kp, float& kd, float delta, float freq);
-
   // -------------- PARAMETERS --------------
 
   // controller gains
-  float kpPosXY, kpPosZ, freqXYZ;
-  float kpVelXY, kpVelZ, deltaXYZ;
+  float kpPosXY, kpPosZ;
+  float kpVelXY, kpVelZ;
   float kpBank, kpYaw;
   float KiPosZ;
   V3F kpPQR;
