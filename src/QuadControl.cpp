@@ -222,11 +222,12 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
   float posZErr = posZCmd - posZ;
+  integratedAltitudeError += posZErr * dt;
   velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate);
   float velZErr = velZCmd - velZ;
   float kp, kd;  
   Tune(kp, kd, deltaXYZ, freqXYZ);
-  float accelZTarget = kpPosZ * posZErr + kpVelZ * velZErr + accelZCmd;
+  float accelZTarget = kpPosZ * posZErr + KiPosZ * integratedAltitudeError + kpVelZ * velZErr + accelZCmd;
   float bz = R(2, 2);
   thrust = (accelZTarget - 9.81) / bz;
   
