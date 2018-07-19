@@ -226,7 +226,7 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   float velZErr = velZCmd - velZ;
   float kp, kd;  
   Tune(kp, kd, deltaXYZ, freqXYZ);
-  float accelZTarget = kp * posZErr + kd * velZErr + accelZCmd;
+  float accelZTarget = kpPosZ * posZErr + kpVelZ * velZErr + accelZCmd;
   float bz = R(2, 2);
   thrust = (accelZTarget - 9.81) / bz;
   
@@ -271,7 +271,7 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   V3F velErr = velCmd - vel;
   float kp, kd;  
   Tune(kp, kd, deltaXYZ, freqXYZ);
-  accelCmd += kp * posErr + kd * velErr;
+  accelCmd += kpPosXY * posErr + kpVelXY * velErr;
 
   float hAccel = CONSTRAIN(accelCmd.mag(), -maxAccelXY, maxAccelXY);
   accelCmd = accelCmd.norm() * hAccel;
